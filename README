@@ -1,5 +1,7 @@
 ChefIQ Wireless Meat Thermometer Probe Analysis tool
 
+Purpose: To be able to look at previous cooks and determine the best temperatures, times, and techniques for smoking meats
+
 What it does:
  - Upload your Data from the ChefIQ app
     - Go to "More" > "Cooking History"
@@ -9,3 +11,11 @@ What it does:
     - Name and upload your data
     - Look at your graph and the temperature delta to analyze your ambient temperature stability and how evenly your meat cooked
 
+Next Steps:
+   - Create Page to look through past cooks. Pull up graphs for individual cooks
+   - Brainstorm analysis techniques. What info do I want to know
+      - Color in fat-rendering portion of time-temp graph
+      - Add in weight (collecting data on how long it took what weight to cook)
+      - Stall duration. Analyzing change in temp/time
+      - Optimal pull-off temperature based on previous cooks (how high they continued to rise)
+   - Use a more interactive graphing software. Be able to zoom in and out
