@@ -1,6 +1,11 @@
-What I need
+ChefIQ Wireless Meat Thermometer Probe Analysis tool
 
-1. Temp-Time graph
-2. Measure of temperature delta throughout cook (graph?)
-3. Stability of ambient
+What it does:
+ - Upload your Data from the ChefIQ app
+    - Go to "More" > "Cooking History"
+    - Click on the cook youd like to upload, hit export graph
+    - Save the graph to files
+    - Open "https://collapse-quantum-lard.ngrok-free.dev"
+    - Name and upload your data
+    - Look at your graph and the temperature delta to analyze your ambient temperature stability and how evenly your meat cooked
 

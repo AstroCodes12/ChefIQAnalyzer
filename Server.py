@@ -4,7 +4,11 @@ from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 import requests as http_requests
 import os, uuid
+from dotenv import load_dotenv
+import analysis as a
 
+
+load_dotenv()
 
 """
 Next Steps:
@@ -19,113 +23,88 @@ Next Steps:
 
 
 
-API_KEY = "SK9323e0874c4c85dcac9ec83a4f71bafc"
-API_SECRET = "AL6wvpjvV6i5V6sKv0f7k8eKaZNkWOI3"
 
-Pending_Files = {}
-
-#setup
-Upload_Dir = "Uploads"
-os.makedirs(Upload_Dir, exists_ok=True)
-Graph_Dir = "Graphs"
+#setup file storage
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+Graph_Dir = os.path.join(BASE_DIR, "charts")
+Upload_Dir = os.path.join(BASE_DIR, "uploads")
+os.makedirs(Upload_Dir, exist_ok=True)
 os.makedirs(Graph_Dir, exist_ok=True)
-
-#functions
-def is_valid_name(name):
-    """Return True if the name has at least one alphanumeric character and
-    is short enough to be a reasonable file name."""
-    return bool(name) and len(name) <= 50 and any(c.isalnum() for c in name)
-
-def sanitize(name):
-    return name.strip().replace(" ", "_").replace("/","").replace("\\", "")
-
-def downloadFile(media_URL):
-    r = http_requests.get(media_URL, auth=(API_KEY, API_SECRET), timeout=15)
-    r.raise_for_status()
-    return r.text
-
 
 app = Flask(__name__)
 
-@app.route("/webhook", methods=["POST"])
+@app.route("/")
+def index():
+    return '''
+        <html>
+            <body>
+                <h2>ChefIQ Analyzer</h2>
+                <form action="/upload" method="post" enctype="multipart/form-data">
+                    <label>Name Your File:<label><br>
+                    <input type="text" name="custom_name" placeholder="e.g. Brisket_10-6-26"><br><br>
+                    <input type="file" name="file" accept=".csv,.txt">
+                    <button type="submit">Analyze</button>
+                </form>
+            </body>
+        </html>
+    '''
 
-def webhook():
-    #Get data about incoming request
-    sender = request.form.get("From");
-    Num_Media = int(request.form.get("NumMedia", 0))
-    body = request.form.get("Body", "").strip()
-    resp = MessagingResponse()
+@app.route("/upload", methods=["POST"])
 
-    """----------------------------------if its expecting a name-----------------------------------------------"""
-    if sender in Pending_Files:
-    #Bad Name
-        if Num_Media > 0:
-            resp.message("Send which kind of meat you last cooked please!")
-            return str(resp)
-        if not body:
-            resp.message("Thats an empty message dumbass")
-            return str(resp)
-        if not is_valid_name(body):
-            resp.message("That isn't a valid name")
-            return str(resp)
-        
-        #Successful Name | Renames file and saves to Upload_Dir
-        temp_path = Pending_Files.pop(0)
-        final_Name = sanitize(body)
-        final_Path = os.path.join(Upload_Dir, f"{final_Name}.csv")
-        os.rename(temp_path, final_Path)
+def upload():
+    if "file" not in request.files:
+        return "No file idiot", 400
+    file = request.files["file"]
 
-        #Verify the file was renamed correctly
-        if not os.path.exists(final_Path):
-            resp.message("The File failed to rename. Final_Path DNE")
-            return resp
-        if os.path.getsize(final_Path) == 0:
-            resp.message("The file was renamed, but there is no data in the file")
-            return resp
-        try:
-            df = pd.read_csv(final_Path, header=10,skipinitialspace=True)
-            if df.empty:
-                resp.message("The file is saved, but has no data in it. Empty spreadsheet")
-                return resp
-        except Exception as e:
-            resp.message(f"The file was saved, but couldn't be read as a .CSV: {e}")
-            return resp
-        
-        #if it passes all the checks, it clears the pending list
-        Pending_Files.clear()
-
-    """-----------------------------------------Analysis Code-------------------------------------------------"""
+    if file.filename == "":
+        return "No File Selected, idiot", 400
     
-    #Add Analysis Code HERE********* Plus .png and sms code
+
+    custom_name = request.form.get("custom_name", "").strip()
+    if not custom_name or not any(c.isalnum() for c in custom_name):
+        custom_name = file.filename
     
-    """-----------------------------If not expecting a name, expecting file---------------------------------"""
+    file_name = custom_name.replace(" ", "_").replace("/", "").strip() + ".csv"
+    file_path = os.path.join(Upload_Dir, file_name)
+    file.save(file_path)
 
-    #Request File Info
-    file_URL = request.form.get("MediaUrl0")
-    file_type = request.form.get("MediaContentType0", "")
+    fig = a.analyze(file_path)
 
-    allowed_types = ("text/plain", "text/csv", "application/csv", "application/octet-stream")
+    chart_name = f"{custom_name}_Chart.png"
+    chart_path = os.path.join(Graph_Dir, chart_name)
+    fig.savefig(chart_path, dpi=150, bbox_inches="tight")
 
-    if not any(t in file_type for t in allowed_types):
-        resp.message(f"Please send a .csv or .txt file (got: {file_type}).")
-        return str(resp)
+    print("Saved chart to:", chart_path)
+    print("File exists?", os.path.exists(chart_path))
 
-    #Try putting URL content into file
-    try: 
-        Content = downloadFile(file_URL)
-        
-        #Inital Unique Name
-        init_filename = f"{uuid.uuid4().hex}.csv"
 
-        #adds filename to csv_path. Same as adding to folder
-        csv_path = os.path.join(Upload_Dir, init_filename)
-        with open(csv_path, "w") as f:
-            f.write(Content)
-    except Exception as e:
-        resp.message(f"Could not download File: {e}")
-        return resp
-    
-    #Add to pending for next round of requests
-    Pending_Files[2] = {csv_path, sender}
-    resp.message("Got your File! Now gimme a name")
-    return resp
+    return f'''
+        <html>
+            <body>
+                <h2>✅ File received: {file_name}</h2>
+                <p>Your analysis is ready!</p>
+                <img src="charts/{chart_name}" style="max-width:100%">
+                <br><br>
+                <a href="charts/{chart_name}" download="{chart_name}">
+                    ⬇️ Download Chart
+                </a>
+                &nbsp;&nbsp;
+                <a href="/Uploads/{file_name}" download="{file_name}">
+                    ⬇️ Download Original File
+                </a>
+                <br><br>
+                <a href="/">Upload another file</a>
+            </body>
+        </html>
+    '''
+
+@app.route("/charts/<filename>")
+def serve_chart(filename):
+    return send_from_directory(Graph_Dir, filename)
+
+@app.route("/Uploads/<filename>")
+def serve_upload(filename):
+    return send_from_directory(Upload_Dir, filename)
+
+
+app.run(host="0.0.0.0", port=5001)
